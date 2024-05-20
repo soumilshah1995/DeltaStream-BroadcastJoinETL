@@ -1,0 +1,6 @@
+hoodie.streamer.source.hoodieincr.missing.checkpoint.strategy=READ_UPTO_LATEST_COMMIT
+hoodie.streamer.source.hoodieincr.path=s3a://warehouse/default/table_name=orders
+hoodie.datasource.write.recordkey.field=order_id
+hoodie.datasource.write.partitionpath.field=
+hoodie.datasource.write.precombine.field=ts
+hoodie.streamer.transformer.sql=SELECT /*+ BROADCAST(c) */ a.customer_id, c.name AS customer_name, c.state AS state, c.city, c.email, a.order_id, a.name AS order_name, a.order_value, a.priority, a.order_date, a.ts FROM <SRC> a JOIN hudi_db.customers c ON c.customer_id = a.customer_id

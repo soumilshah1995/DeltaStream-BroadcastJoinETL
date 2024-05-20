@@ -1,0 +1,102 @@
+
+
+
+export JAVA_HOME=/opt/homebrew/opt/openjdk@11
+
+export SPARK_HOME=/opt/homebrew/opt/apache-spark/libexec
+export PATH=$SPARK_HOME/bin:$PATH
+
+spark-sql \
+    --packages 'org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0,org.apache.hadoop:hadoop-aws:3.3.2' \
+    --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+    --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
+    --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
+    --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar' \
+    --conf "spark.hadoop.fs.s3a.access.key=admin" \
+    --conf "spark.hadoop.fs.s3a.secret.key=password" \
+    --conf "spark.hadoop.fs.s3a.endpoint=http://127.0.0.1:9000" \
+    --conf "spark.hadoop.fs.s3a.path.style.access=true" \
+    --conf "fs.s3a.signing-algorithm=S3SignerType" \
+    --conf "spark.sql.catalogImplementation=hive" \
+    --conf "spark.hadoop.hive.metastore.uris=thrift://localhost:9083"
+
+
+
+CREATE SCHEMA hudi_db LOCATION 's3a://warehouse/';
+
+USE hudi_db;
+
+CREATE TABLE orders (
+    order_id STRING,
+    name STRING,
+    order_value DOUBLE,
+    priority INT,
+    state STRING,
+    order_date STRING,
+    customer_id STRING,
+    ts STRING
+)
+USING hudi
+LOCATION 's3a://warehouse/default/table_name=orders';
+
+
+INSERT INTO orders
+VALUES
+    ('order001', 'Product A', 100.00, 1, 'California', '2024-04-03', 'cust001', '1234567890'),
+    ('order002', 'Product B', 150.00, 2, 'New York', '2024-04-03', 'cust002', '1234567890'),
+    ('order003', 'Product C', 200.00, 1, 'Texas', '2024-04-03', 'cust003', '1234567890');
+
+
+
+CREATE TABLE customers (
+    customer_id STRING,
+    name STRING,
+    state STRING,
+    city STRING,
+    email STRING,
+    created_at STRING,
+    ts STRING
+)
+USING hudi
+LOCATION 's3a://warehouse/default/table_name=bronze_customers';
+
+INSERT INTO customers
+VALUES
+    ('cust001', 'John', 'California', 'San Francisco', 'john@example.com', '2024-04-03T09:00:00', '1234567890'),
+    ('cust002', 'Alice', 'New York', 'New York City', 'alice@example.com', '2024-04-03T09:00:00', '1234567890'),
+    ('cust003', 'Bob', 'Texas', 'Austin', 'bob@example.com', '2024-04-03T09:00:00', '1234567890');
+
+
+
+
+spark-submit \
+    --class org.apache.hudi.utilities.streamer.HoodieStreamer \
+    --packages 'org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0,org.apache.hadoop:hadoop-aws:3.3.2' \
+    --properties-file spark-config.properties \
+    --master 'local[*]' \
+    --executor-memory 1g \
+     /Users/soumilshah/IdeaProjects/SparkProject/DeltaStreamer/jar/hudi-utilities-slim-bundle_2.12-0.14.0.jar \
+    --table-type COPY_ON_WRITE \
+    --target-base-path 's3a://warehouse/default/table_name=silver_orders'  \
+    --target-table silver_orders \
+    --op UPSERT \
+    --transformer-class 'org.apache.hudi.utilities.transform.SqlQueryBasedTransformer' \
+    --source-limit 4000000 \
+    --source-ordering-field ts \
+    --min-sync-interval-seconds 40 \
+    --continuous \
+    --source-class org.apache.hudi.utilities.sources.HoodieIncrSource \
+    --props hudi_tbl.props
+
+
+
+
+
+
+
+
+
+
+
+
+
